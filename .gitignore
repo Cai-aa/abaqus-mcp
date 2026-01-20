@@ -1,0 +1,17 @@
+# Runtime files
+status.json
+stop.flag
+
+# Command and result files
+commands/*.json
+results/*.json
+scripts/*.py
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
