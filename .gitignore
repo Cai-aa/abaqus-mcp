@@ -22,3 +22,7 @@ __pycache__/
 
 # Backup files
 *.bak
+
+# Personal docs
+MCP_SETUP_GUIDE.md
+
