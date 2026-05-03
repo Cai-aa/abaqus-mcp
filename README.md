@@ -1,5 +1,7 @@
 # Abaqus MCP Plugin v4.0
-
+- Thisproject is based on [abaqus-mcp](https://github.com/Cai-aa/abaqus-mcp) modified
+- Follwing MIT License realease
+- Main changes is fit abaqus 2022 especially
 A plugin that enables communication between **Abaqus/CAE** and external AI assistants (or any MCP client) via file-based IPC.
 
 ## What's New in v4.0

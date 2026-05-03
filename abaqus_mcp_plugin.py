@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import print_function
 """
 Abaqus MCP Plugin v4.0 - file IPC bridge.
 
@@ -43,7 +44,7 @@ def _resolve_mcp_home():
             return script_dir
     except Exception:
         pass
-    return os.path.join(os.path.expanduser('~'), '.abaqus-mcp')
+    return r'E:\Song\2fin-L\abaqus-mcp'
 
 
 MCP_HOME = _resolve_mcp_home()
@@ -69,14 +70,14 @@ def _log(level, message):
     try:
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         line = '[%s] %s: %s\n' % (ts, level, message)
-        with io.open(LOG_FILE, 'a', encoding='utf-8') as f:
+        with open(LOG_FILE, 'a') as f:
             f.write(line)
     except Exception:
         pass
 
 
 def write_status(status, message=""):
-    """Write status atomically so external readers never see partial JSON."""
+    """Write status file (Python 2.7 + Windows compatible)."""
     payload = {
         "status": status,
         "message": message,
@@ -88,16 +89,21 @@ def write_status(status, message=""):
     }
     tmp_file = STATUS_FILE + '.tmp'
     try:
-        with io.open(tmp_file, 'w', encoding='utf-8') as f:
-            json.dump(payload, f, indent=2)
-        for _ in range(5):
+        payload_str = json.dumps(payload, indent=2)
+        with open(tmp_file, 'w') as f:
+            f.write(payload_str)
+        if os.path.exists(STATUS_FILE):
             try:
-                os.replace(tmp_file, STATUS_FILE)
-                return
+                os.remove(STATUS_FILE)
             except Exception:
-                time.sleep(0.02)
-        with io.open(STATUS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(payload, f, indent=2)
+                pass
+        try:
+            os.rename(tmp_file, STATUS_FILE)
+            return
+        except Exception:
+            pass
+        with open(STATUS_FILE, 'w') as f:
+            f.write(payload_str)
         try:
             os.remove(tmp_file)
         except Exception:
@@ -107,8 +113,9 @@ def write_status(status, message=""):
 
 
 def _write_json(path, data):
-    with io.open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    s = json.dumps(data, indent=2)
+    with open(path, 'w') as f:
+        f.write(s)
 
 
 def _background_self_test(timeout=1.5):
@@ -133,9 +140,18 @@ def _background_self_test(timeout=1.5):
     while time.time() < deadline:
         if os.path.exists(result_path):
             try:
-                with io.open(result_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                return bool(data.get('success'))
+                with open(result_path, 'rb') as f:
+                    raw = f.read()
+                data = None
+                for enc in ['utf-8-sig', 'utf-8', 'gbk', 'latin-1']:
+                    try:
+                        data = json.loads(raw.decode(enc))
+                        break
+                    except (UnicodeDecodeError, ValueError):
+                        continue
+                if data is not None:
+                    return bool(data.get('success'))
+                return False
             except Exception:
                 return False
             finally:
@@ -192,8 +208,12 @@ def execute_script(script_content, script_id):
     }
     script_path = os.path.join(SCRIPTS_DIR, 'script_' + script_id + '.py')
     try:
-        with io.open(script_path, 'w', encoding='utf-8') as f:
-            f.write(script_content)
+        if isinstance(script_content, bytes):
+            raw = script_content
+        else:
+            raw = script_content.encode('utf-8')
+        with open(script_path, 'wb') as f:
+            f.write(raw)
     except Exception as e:
         result['error'] = str(e)
         return result
@@ -210,8 +230,18 @@ def execute_script(script_content, script_id):
     exec_globals['print'] = lambda *a, **k: output_lines.append(' '.join(str(x) for x in a))
 
     try:
-        with io.open(script_path, 'r', encoding='utf-8') as f:
-            exec(compile(f.read(), script_path, 'exec'), exec_globals)
+        with open(script_path, 'rb') as f:
+            raw = f.read()
+        script_text = None
+        for enc in ['utf-8-sig', 'utf-8', 'gbk', 'latin-1']:
+            try:
+                script_text = raw.decode(enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        if script_text is None:
+            script_text = raw.decode('latin-1')
+        exec(compile(script_text, script_path, 'exec'), exec_globals)
         result['success'] = True
         result['output'] = '\n'.join(output_lines)
     except Exception as e:
@@ -334,7 +364,9 @@ def get_viewport_image(viewport_name=None, width=800, height=600, fmt='PNG'):
         )
         if os.path.exists(img_file):
             with open(img_file, 'rb') as f:
-                data = base64.b64encode(f.read()).decode('ascii')
+                data = base64.b64encode(f.read())
+            if isinstance(data, bytes):
+                data = data.decode('ascii')
             try:
                 os.remove(img_file)
             except Exception:
@@ -390,7 +422,7 @@ def process_command(command):
         elif cmd_type == 'stop':
             result['success'] = True
             result['data'] = 'stopping'
-            with io.open(STOP_FILE, 'w', encoding='utf-8') as f:
+            with open(STOP_FILE, 'w') as f:
                 f.write('stop')
         else:
             result['error'] = 'Unknown command: ' + cmd_type
@@ -410,8 +442,14 @@ def _load_command_file(cmd_path, retries=3, delay=0.03):
     """Retry reads briefly to tolerate partially-written command files."""
     for _ in range(retries):
         try:
-            with io.open(cmd_path, 'r', encoding='utf-8-sig') as f:
-                return json.load(f)
+            with open(cmd_path, 'rb') as f:
+                raw = f.read()
+            for enc in ['utf-8-sig', 'utf-8', 'gbk', 'latin-1']:
+                try:
+                    text = raw.decode(enc)
+                    return json.loads(text)
+                except (UnicodeDecodeError, ValueError):
+                    continue
         except Exception:
             time.sleep(delay)
     return None
@@ -537,7 +575,7 @@ def _mcp_thread_loop(generation, poll_interval):
     except Exception as e:
         err_path = os.path.join(MCP_HOME, 'thread_error.log')
         try:
-            with io.open(err_path, 'w', encoding='utf-8') as f:
+            with open(err_path, 'w') as f:
                 f.write(str(e) + '\n\n')
                 f.write(traceback.format_exc())
         except Exception:
@@ -655,7 +693,7 @@ def mcp_stop():
     _mcp_generation += 1
 
     try:
-        with io.open(STOP_FILE, 'w', encoding='utf-8') as f:
+        with open(STOP_FILE, 'w') as f:
             f.write('stop')
     except Exception:
         pass

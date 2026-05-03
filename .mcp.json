@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "abaqus-mcp-server": {
-      "command": "python",
-      "args": ["C:/Users/Cai/.abaqus-mcp/mcp_server.py"]
+      "command": "D:\\tmp\\MiniConda\\python.exe",
+      "args": ["E:\\Song\\2fin-L\\abaqus-mcp\\mcp_server.py"],
+      "env": {
+        "ABAQUS_MCP_HOME": "E:\\Song\\2fin-L\\abaqus-mcp"
+      }
     }
   }
 }
