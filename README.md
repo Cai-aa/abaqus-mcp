@@ -257,6 +257,22 @@ Result will appear at `~/.abaqus-mcp/results/my_command.json`.
   - Verify `~/abaqus_plugins/mcp_control/` exists and contains `mcp_control_plugin.py`
   - Restart Abaqus/CAE
 
+## Development tests
+
+Run the viewport regression suite with Python 3 and the MCP server dependency:
+
+```bash
+python -m pip install mcp
+python -m unittest discover -s tests -v
+```
+
+The tests mock the Abaqus API and isolate plugin status/log files in a temporary
+IPC home. They cover PNG/SVG/TIFF export, the TIF alias, file cleanup, data URI
+MIME types, and error propagation through the command dispatcher and MCP tool.
+They do not require Abaqus or a license and do not validate real rendering or
+Abaqus-version compatibility. Before release, verify PNG, SVG, and TIFF captures
+in a real Abaqus/CAE session, including an invalid viewport error.
+
 ## License
 
 MIT License

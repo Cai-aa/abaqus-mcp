@@ -320,29 +320,45 @@ def get_odb_info(odb_path):
 
 def get_viewport_image(viewport_name=None, width=800, height=600, fmt='PNG'):
     """Capture a viewport image and return it as base64."""
+    image_paths = []
     try:
         from abaqus import session
+        from abaqusConstants import PNG, SVG, TIFF
+
+        fmt_name = str(fmt or 'PNG').upper()
+        if fmt_name == 'TIF':
+            fmt_name = 'TIFF'
+        formats = {'PNG': PNG, 'SVG': SVG, 'TIFF': TIFF}
+        if fmt_name not in formats:
+            return {'success': False, 'error': 'Unsupported image format: ' + fmt_name}
+
         vp_name = viewport_name or session.currentViewportName
         if vp_name not in session.viewports:
             return {'success': False, 'error': 'Viewport not found: ' + str(vp_name)}
 
-        img_file = os.path.join(SCREENSHOTS_DIR, 'viewport_' + str(int(time.time())) + '.' + fmt.lower())
+        img_base = os.path.join(SCREENSHOTS_DIR, 'viewport_' + uuid.uuid4().hex)
+        extensions = ('tif', 'tiff') if fmt_name == 'TIFF' else (fmt_name.lower(),)
+        image_paths = [img_base + '.' + ext for ext in extensions]
         session.printToFile(
-            fileName=img_file,
-            format=getattr(session, fmt.upper(), session.PNG),
+            fileName=img_base,
+            format=formats[fmt_name],
             canvasObjects=(session.viewports[vp_name],)
         )
-        if os.path.exists(img_file):
-            with open(img_file, 'rb') as f:
-                data = base64.b64encode(f.read()).decode('ascii')
-            try:
-                os.remove(img_file)
-            except Exception:
-                pass
-            return {'success': True, 'image_base64': data, 'format': fmt.lower()}
+        for img_file in image_paths:
+            if os.path.exists(img_file):
+                with open(img_file, 'rb') as f:
+                    data = base64.b64encode(f.read()).decode('ascii')
+                return {'success': True, 'image_base64': data, 'format': fmt_name.lower()}
         return {'success': False, 'error': 'Image file not created'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
+    finally:
+        for img_file in image_paths:
+            try:
+                if os.path.exists(img_file):
+                    os.remove(img_file)
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------

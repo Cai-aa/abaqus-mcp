@@ -209,11 +209,16 @@ def get_viewport_image(viewport_name: str = "", image_format: str = "PNG") -> st
         data = result.get('data', {})
         if isinstance(data, dict) and data.get('success'):
             b64 = data.get('image_base64', '')
-            fmt = data.get('format', 'png')
-            return f'data:image/{fmt};base64,{b64}'
-        return json.dumps(data, indent=2)
-    else:
-        return f'Error: {result.get("error", "Unknown error")}'
+            fmt = data.get('format', 'png').lower()
+            mime_type = {'png': 'image/png', 'svg': 'image/svg+xml',
+                         'tif': 'image/tiff', 'tiff': 'image/tiff'}.get(fmt, 'image/' + fmt)
+            return f'data:{mime_type};base64,{b64}'
+        if not isinstance(data, dict) or not data.get('error'):
+            return json.dumps(data, indent=2)
+    data = result.get('data', {})
+    detail = data.get('error', '') if isinstance(data, dict) else ''
+    error = result.get('error') or detail or 'Unknown error'
+    return f'Error: {error}'
 
 
 @mcp.tool()
