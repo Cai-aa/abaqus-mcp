@@ -13,7 +13,10 @@ import time
 import uuid
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+try:  # MCP Python SDK < 2.0
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # MCP Python SDK >= 2.0 (FastMCP renamed to MCPServer)
+    from mcp.server.mcpserver import MCPServer as FastMCP
 
 MCP_HOME = Path(os.environ.get('ABAQUS_MCP_HOME', Path.home() / '.abaqus-mcp'))
 COMMANDS_DIR = MCP_HOME / 'commands'
