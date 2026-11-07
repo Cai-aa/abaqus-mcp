@@ -22,6 +22,69 @@ import traceback
 import uuid
 from datetime import datetime
 
+# ---------------------------------------------------------------------------
+# Python 2.7 compatibility shims (Abaqus 2022 CAE kernel runs Python 2.7.15)
+# ---------------------------------------------------------------------------
+# 1) io.open(..., encoding=...) in py2 returns a TextIOWrapper that only accepts
+#    unicode; json.dump()/f.write() pass str (bytes) -> TypeError: write()
+#    argument 1 must be unicode, not str. Every status/result/log write failed
+#    silently, which made the heartbeat and self-test fail.
+# 2) os.replace() does not exist before Python 3.3.
+import sys as _sys
+import types as _types
+
+if _sys.version_info[0] < 3:
+    _io_real = _sys.modules['io']
+
+    class _Utf8Writer(object):
+        """Text wrapper accepting both py2 str (bytes) and unicode."""
+
+        def __init__(self, fh):
+            self._fh = fh
+
+        def write(self, data):
+            if isinstance(data, str):
+                # Abaqus kernel messages may be GBK (mbcs) bytes, not UTF-8.
+                for _enc in ('utf-8', 'mbcs', 'latin-1'):
+                    try:
+                        data = data.decode(_enc)
+                        break
+                    except (UnicodeDecodeError, LookupError):
+                        continue
+                else:
+                    data = data.decode('latin-1', 'replace')
+            return self._fh.write(data)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            self._fh.close()
+
+        def __getattr__(self, name):
+            return getattr(self._fh, name)
+
+    def _io_open(path, mode='r', buffering=-1, encoding=None, errors=None,
+                 newline=None, closefd=True):
+        fh = _io_real.open(path, mode, buffering, encoding, errors, newline, closefd)
+        if 'b' in mode:
+            return fh
+        return _Utf8Writer(fh)
+
+    _io_shim = _types.ModuleType('io_mcp_shim')
+    _io_shim.__dict__.update(_io_real.__dict__)
+    _io_shim.open = _io_open
+    io = _io_shim
+
+    if not hasattr(os, 'replace'):
+        def _os_replace(src, dst):
+            try:
+                os.remove(dst)
+            except OSError:
+                pass
+            os.rename(src, dst)
+        os.replace = _os_replace
+
 __version__ = '4.0.0'
 
 try:
@@ -210,7 +273,9 @@ def execute_script(script_content, script_id):
     exec_globals['print'] = lambda *a, **k: output_lines.append(' '.join(str(x) for x in a))
 
     try:
-        with io.open(script_path, 'r', encoding='utf-8') as f:
+        # Bytes, not text: on Python 2.7 compile() rejects unicode source that
+        # carries a coding declaration ("encoding declaration in Unicode string").
+        with open(script_path, 'rb') as f:
             exec(compile(f.read(), script_path, 'exec'), exec_globals)
         result['success'] = True
         result['output'] = '\n'.join(output_lines)
